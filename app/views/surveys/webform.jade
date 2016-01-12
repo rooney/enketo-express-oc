@@ -6,6 +6,8 @@ block redirect
 block style
   link(rel='stylesheet', media='all', type='text/css' href='/css/theme-#{defaultTheme}.css') 
   link(rel='stylesheet', media='print', type='text/css' href='/css/theme-#{defaultTheme}.print.css') 
+  link(rel='stylesheet', media='all', type='text/css' href='/css/theme-ie.css')
+  <!--[if gt IE 5.5]><link rel="stylesheet" media="all" type="text/css" href="/css/theme-ie.css" /><![endif]--> 
 
 block script
   - var suffix = (type && type == "edit") ? "-edit" : ""
