@@ -28,7 +28,7 @@ var survey = {
 _setEmergencyHandlers();
 
 if ( settings.offline ) {
-    console.debug( 'in offline mode' );
+    // console.debug( 'in offline mode' );
     formCache.init( survey )
         .then( _swapTheme )
         .then( _init )
@@ -42,7 +42,7 @@ if ( settings.offline ) {
         } )
         .catch( _showErrorOrAuthenticate );
 } else {
-    console.debug( 'in online mode' );
+    // console.debug( 'in online mode' );
     connection.getFormParts( survey )
         .then( _swapTheme )
         .then( _init )
