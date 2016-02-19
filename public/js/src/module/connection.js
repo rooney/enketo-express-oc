@@ -327,6 +327,7 @@ function getMaximumSubmissionSize() {
 function getFormParts( props ) {
     var error,
         deferred = Q.defer();
+
     $.ajax( TRANSFORM_URL, {
             type: 'POST',
             data: {
@@ -338,34 +339,17 @@ function getFormParts( props ) {
         } )
         .done( function( data ) {
             data.enketoId = props.enketoId;
-            if (typeof(Storage) !== "undefined") {
-                localStorage.setItem("data-"+window.location.search, JSON.stringify(data));
-            }
             _getExternalData( data )
                 .then( deferred.resolve )
                 .catch( deferred.reject );
         } )
         .fail( function( jqXHR, textStatus, errorMsg ) {
-            var reject = true;
-            if (typeof(Storage) !== "undefined") {
-                var item = localStorage.getItem("data-"+window.location.search);
-                if(item !== undefined) {
-                    reject = false;
-                    _getExternalData( JSON.parse(item) )
-                        .then( deferred.resolve )
-                        .catch( deferred.reject );
-                }
-            } 
-
-            if (reject) {
-                if ( jqXHR.responseJSON && jqXHR.responseJSON.message && /ENOTFOUND/.test( jqXHR.responseJSON.message ) ) {
-                    jqXHR.responseJSON.message = 'Form could not be retrieved from server.';
-                }
-                error = jqXHR.responseJSON || new Error( errorMsg );
-                error.status = jqXHR.status;
-                deferred.reject( error );
+            if ( jqXHR.responseJSON && jqXHR.responseJSON.message && /ENOTFOUND/.test( jqXHR.responseJSON.message ) ) {
+                jqXHR.responseJSON.message = 'Form could not be retrieved from server.';
             }
-        
+            error = jqXHR.responseJSON || new Error( errorMsg );
+            error.status = jqXHR.status;
+            deferred.reject( error );
         } );
 
     return deferred.promise;
@@ -374,6 +358,7 @@ function getFormParts( props ) {
 function _getExternalData( survey ) {
     var doc, deferred,
         tasks = [];
+
     try {
         doc = $.parseXML( survey.model );
 

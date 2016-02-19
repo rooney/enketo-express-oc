@@ -48,13 +48,6 @@ router
  * @return {[type]}        [description]
  */
 function submit( req, res, next ) {
-    if (typeof(Storage) !== "undefined") {
-        var item = localStorage.getItem("data-"+window.location.search);
-        if(item !== undefined) {
-            console.log("trigger");
-            $( document ).trigger( 'submissionsuccess' );
-        }
-    } 
     var server, submissionUrl, credentials, options,
         paramName = req.app.get( "query parameter to pass to submission" ),
         paramValue = req.query[ paramName ],
