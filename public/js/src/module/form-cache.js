@@ -1,29 +1,14 @@
 /**
- * @preserve Copyright 2014 Martijn van de Rijdt & Harvard Humanitarian Initiative
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
  * Deals with browser storage
  */
 
 'use strict';
 
 var store = require( './store' );
+var settings = require( './settings' );
 var connection = require( './connection' );
-var Q = require( 'q' );
 var $ = require( 'jquery' );
+var assign = require( 'lodash/object/assign' );
 
 var hash;
 
@@ -32,11 +17,11 @@ function init( survey ) {
         .then( function() {
             return get( survey );
         } )
+        .then( _removeQueryString )
+        .then( _processDynamicData )
         .then( function( result ) {
-            var deferred = Q.defer();
             if ( result ) {
-                deferred.resolve( result );
-                return deferred.promise;
+                return result;
             } else {
                 return set( survey );
             }
@@ -59,25 +44,66 @@ function remove( survey ) {
     return store.survey.remove( survey.enketoId );
 }
 
-function update( survey ) {
-    return store.survey.update( survey );
+function _removeQueryString( survey ) {
+    var bareUrl = window.location.pathname + window.location.hash;
+
+    history.replaceState( null, '', bareUrl );
+
+    return survey;
+}
+
+function _processDynamicData( survey ) {
+    // TODO: In the future this method could perhaps be used to also store
+    // dynamic defaults. However, the issue would be to figure out how to clear
+    // those defaults.
+    if ( !survey ) {
+        return survey;
+    }
+    return store.dynamicData.get( survey.enketoId )
+        .then( function( data ) {
+            var newData = {
+                enketoId: survey.enketoId
+            };
+            assign( newData, data );
+            // Compare settings data with stored data to determine what to update. 
+            if ( settings.submissionParameter.name ) {
+                if ( settings.submissionParameter.value ) {
+                    // use the settings value
+                    newData.submissionParameter = settings.submissionParameter;
+                } else if ( settings.submissionParameter.value === '' ) {
+                    // delete value
+                    delete newData.submissionParameter;
+                } else if ( data && data.submissionParameter && data.submissionParameter.value ) {
+                    // use the stored value
+                    settings.submissionParameter.value = data.submissionParameter.value;
+                }
+            } else {
+                delete newData.submissionParameter;
+            }
+
+            return store.dynamicData.update( newData );
+        } )
+        .then( function() {
+            return survey;
+        } );
 }
 
 function _setUpdateIntervals( survey ) {
-    var deferred = Q.defer();
-
     hash = survey.hash;
 
-    // when it's pretty certain that the form has been rendered, check for form update
+    // Check for form update upon loading.
+    // Note that for large Xforms where the XSL transformation takes more than 30 seconds, 
+    // the first update make take 20 minutes to propagate to the browser of the very first user(s) 
+    // that open the form right after the XForm update.
     setTimeout( function() {
         _updateCache( survey );
-    }, 3 * 60 * 1000 );
+    }, 3 * 1000 );
     // check for form update every 20 minutes
     setInterval( function() {
         _updateCache( survey );
     }, 20 * 60 * 1000 );
-    deferred.resolve( survey );
-    return deferred.promise;
+
+    return Promise.resolve( survey );
 }
 
 /**
@@ -87,7 +113,6 @@ function _setUpdateIntervals( survey ) {
  * @param {[type]} survey [description]
  */
 function _setResetListener( survey ) {
-    var deferred = Q.defer();
 
     $( document ).on( 'formreset', function( event ) {
         if ( event.target.nodeName.toLowerCase() === 'form' ) {
@@ -96,17 +121,13 @@ function _setResetListener( survey ) {
         }
     } );
 
-    deferred.resolve( survey );
-    return deferred.promise;
+    return Promise.resolve( survey );
 }
 
 function _swapMediaSrc( survey ) {
-    var deferred = Q.defer();
+    survey.form = survey.form.replace( /(src=\"[^"]*\")/g, 'data-offline-$1 src=""' );
 
-    survey.form = survey.form.replace( /(src=\"[^"]*\")/g, "data-offline-$1 src=\"\"" );
-    deferred.resolve( survey );
-
-    return deferred.promise;
+    return Promise.resolve( survey );
 }
 
 /**
@@ -119,18 +140,16 @@ function _swapMediaSrc( survey ) {
  * @return {[type]}        [description]
  */
 function updateMaxSubmissionSize( survey ) {
-    var deferred = Q.defer();
 
     if ( !survey.maxSize ) {
-        connection.getMaximumSubmissionSize()
+        return connection.getMaximumSubmissionSize()
             .then( function( maxSize ) {
                 survey.maxSize = maxSize;
-                deferred.resolve( survey );
+                return survey;
             } );
     } else {
-        deferred.resolve( survey );
+        return Promise.resolve( survey );
     }
-    return deferred.promise;
 }
 
 /**
@@ -149,39 +168,67 @@ function updateMedia( survey ) {
 
     survey.resources = [];
 
-    _getElementsGroupedBySrc( survey.$form ).forEach( function( elements ) {
+    _getElementsGroupedBySrc( survey.$form.add( $( '.form-header' ) ) ).forEach( function( elements ) {
         var src = elements[ 0 ].dataset.offlineSrc;
         requests.push( connection.getMediaFile( src ) );
     } );
 
-    return Q.all( requests )
+    return Promise.all( requests.map( _reflect ) )
         .then( function( resources ) {
-            var deferred = Q.defer();
+            // filter out the failed requests (undefined)
+            resources = resources.filter( function( resource ) {
+                return !!resource;
+            } );
             survey.resources = resources;
-            deferred.resolve( survey );
-            return deferred.promise;
+            return survey;
         } )
+        // store any resources that were succesfull
         .then( store.survey.update )
-        .then( _loadMedia );
+        .then( _loadMedia )
+        .catch( function( error ) {
+            console.error( 'loadMedia failed', error );
+            // Let the flow continue. 
+            return survey;
+        } );
+}
+
+/**
+ * To be used with Promise.all if you want the results to be returned even if some 
+ * have failed. Failed tasks will return undefined.
+ *
+ * @param  {Promise} task [description]
+ * @return {*}         [description]
+ */
+function _reflect( task ) {
+    return task
+        .then( function( response ) {
+                return response;
+            },
+            function( error ) {
+                console.error( error );
+                return;
+            } );
 }
 
 function _loadMedia( survey ) {
-    var resourceUrl,
-        deferred = Q.defer(),
-        URL = window.URL || window.webkitURL;
+    var resourceUrl;
+    var URL = window.URL || window.webkitURL;
 
-    _getElementsGroupedBySrc( survey.$form ).forEach( function( elements ) {
+    _getElementsGroupedBySrc( survey.$form.add( $( '.form-header' ) ) ).forEach( function( elements ) {
         var src = elements[ 0 ].dataset.offlineSrc;
-
+        // TODO: For nicer loading and hiding ugly alt attribute text, 
+        // maybe add style: visibility: hidden until the src is populated?
         store.survey.resource.get( survey.enketoId, src )
             .then( function( resource ) {
-                // var srcUsedInsideRepeat;
+                if ( !resource || !resource.item ) {
+                    console.error( 'resource not found or not complete', resource );
+                    return;
+                }
                 // create a resourceURL
                 resourceUrl = URL.createObjectURL( resource.item );
                 // add this resourceURL as the src for all elements in the group
                 elements.forEach( function( element ) {
                     element.src = resourceUrl;
-                    // srcUsedInsideRepeat = srcUsedInsideRepeat || $(element).closest('.or-repeat').length > 0;
                 } );
             } );
     } );
@@ -193,25 +240,24 @@ function _loadMedia( survey ) {
     //    URL.revokeObjectURL( resourceUrl );
     // } );
 
-    deferred.resolve( survey );
-    return deferred.promise;
+    return Promise.resolve( survey );
 }
 
 function _getElementsGroupedBySrc( $form ) {
-    var groupedElements = [],
-        urls = {},
-        $els = $form.find( '[data-offline-src]' );
+    var groupedElements = [];
+    var urls = {};
+    var $els = $form.find( '[data-offline-src]' );
 
     $els.each( function() {
         if ( !urls[ this.dataset.offlineSrc ] ) {
-            var src = this.dataset.offlineSrc,
-                $group = $els.filter( function() {
-                    if ( this.dataset.offlineSrc === src ) {
-                        // remove from $els to improve performance
-                        $els = $els.not( '[data-offline-src="' + src + '"]' );
-                        return true;
-                    }
-                } );
+            var src = this.dataset.offlineSrc;
+            var $group = $els.filter( function() {
+                if ( this.dataset.offlineSrc === src ) {
+                    // remove from $els to improve performance
+                    $els = $els.not( '[data-offline-src="' + src + '"]' );
+                    return true;
+                }
+            } );
 
             urls[ src ] = true;
             groupedElements.push( $.makeArray( $group ) );
@@ -223,28 +269,26 @@ function _getElementsGroupedBySrc( $form ) {
 
 function _updateCache( survey ) {
 
-    console.debug( 'checking for survey update' );
+    console.log( 'Checking for survey update...' );
 
     connection.getFormPartsHash( survey )
         .then( function( version ) {
             if ( hash === version ) {
-                console.debug( 'Cached survey is up to date!' );
+                console.log( 'Cached survey is up to date!', hash );
             } else {
-                console.debug( 'Cached survey is outdated! old:', hash, 'new:', version );
+                console.log( 'Cached survey is outdated! old:', hash, 'new:', version );
                 return connection.getFormParts( survey )
                     .then( function( formParts ) {
-                        var deferred = Q.defer();
                         // media will be updated next time the form is loaded if resources is undefined
                         formParts.resources = undefined;
-                        deferred.resolve( formParts );
-                        return deferred.promise;
+                        return formParts;
                     } )
                     .then( _swapMediaSrc )
                     .then( store.survey.update )
                     .then( function( result ) {
                         // set the hash so that subsequent update checks won't redownload the form
                         hash = result.hash;
-                        console.debug( 'Survey is now updated in the store. Need to refresh.' );
+                        console.log( 'Survey is now updated in the store. Need to refresh.' );
                         $( document ).trigger( 'formupdated' );
                     } );
             }

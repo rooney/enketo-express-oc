@@ -1,7 +1,6 @@
 'use strict';
 
 var Papa = require( 'papaparse' );
-var Q = require( 'q' );
 
 //var hasArrayBufferView = new Blob( [ new Uint8Array( 100 ) ] ).size == 100;
 
@@ -12,26 +11,52 @@ var Q = require( 'q' );
  * @return {Promise}
  */
 function blobToDataUri( blob ) {
-    var deferred = Q.defer(),
-        reader = new window.FileReader();
+    var reader = new window.FileReader();
 
-    reader.onloadend = function() {
-        var base64data = reader.result;
-        deferred.resolve( base64data );
-    };
-    reader.onerror = function( e ) {
-        deferred.reject( e );
-    };
+    return new Promise( function( resolve, reject ) {
+        reader.onloadend = function() {
+            var base64data = reader.result;
+            resolve( base64data );
+        };
+        reader.onerror = function( e ) {
+            reject( e );
+        };
 
-    // There is some quirky Chrome and Safari behaviour if blob is undefined or a string
-    // so we peform an additional check
-    if ( !( blob instanceof Blob ) ) {
-        deferred.reject( new Error( 'TypeError: Require Blob' ) );
-    } else {
-        reader.readAsDataURL( blob );
-    }
+        // There is some quirky Chrome and Safari behaviour if blob is undefined or a string
+        // so we peform an additional check
+        if ( !( blob instanceof Blob ) ) {
+            reject( new Error( 'TypeError: Require Blob' ) );
+        } else {
+            reader.readAsDataURL( blob );
+        }
+    } );
+}
 
-    return deferred.promise;
+/**
+ * Converts a Blob to a an ArrayBuffer
+ *
+ * @param  {Blob} blob The blob
+ * @return {Promise}
+ */
+function blobToArrayBuffer( blob ) {
+    var reader = new window.FileReader();
+
+    return new Promise( function( resolve, reject ) {
+        reader.onloadend = function() {
+            resolve( reader.result );
+        };
+        reader.onerror = function( e ) {
+            reject( e );
+        };
+
+        // There is some quirky Chrome and Safari behaviour if blob is undefined or a string
+        // so we peform an additional check
+        if ( !( blob instanceof Blob ) ) {
+            reject( new Error( 'TypeError: Require Blob' ) );
+        } else {
+            reader.readAsArrayBuffer( blob );
+        }
+    } );
 }
 
 /**
@@ -41,43 +66,46 @@ function blobToDataUri( blob ) {
  * @return {Promise}
  */
 function dataUriToBlob( dataURI ) {
-    var byteString, mimeString, buffer, array, blob,
-        deferred = Q.defer();
+    var byteString;
+    var mimeString;
+    var buffer;
+    var array;
+    var blob;
 
-    try {
-        // convert base64 to raw binary data held in a string
-        // doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
-        byteString = atob( dataURI.split( ',' )[ 1 ] );
-        // separate out the mime component
-        mimeString = dataURI.split( ',' )[ 0 ].split( ':' )[ 1 ].split( ';' )[ 0 ];
+    return new Promise( function( resolve, reject ) {
+        try {
+            // convert base64 to raw binary data held in a string
+            // doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
+            byteString = atob( dataURI.split( ',' )[ 1 ] );
+            // separate out the mime component
+            mimeString = dataURI.split( ',' )[ 0 ].split( ':' )[ 1 ].split( ';' )[ 0 ];
 
-        // write the bytes of the string to an ArrayBuffer
-        buffer = new ArrayBuffer( byteString.length );
-        array = new Uint8Array( buffer );
+            // write the bytes of the string to an ArrayBuffer
+            buffer = new ArrayBuffer( byteString.length );
+            array = new Uint8Array( buffer );
 
-        for ( var i = 0; i < byteString.length; i++ ) {
-            array[ i ] = byteString.charCodeAt( i );
+            for ( var i = 0; i < byteString.length; i++ ) {
+                array[ i ] = byteString.charCodeAt( i );
+            }
+
+            /*if ( !hasArrayBufferView ) {
+                array = buffer;
+            }*/
+
+            // write the ArrayBuffer to a blob
+            blob = new Blob( [ array ], {
+                type: mimeString
+            } );
+
+            resolve( blob );
+        } catch ( e ) {
+            reject( e );
         }
-
-        /*if ( !hasArrayBufferView ) {
-            array = buffer;
-        }*/
-
-        // write the ArrayBuffer to a blob
-        blob = new Blob( [ array ], {
-            type: mimeString
-        } );
-
-        deferred.resolve( blob );
-    } catch ( e ) {
-        deferred.reject( e );
-    }
-
-    return deferred.promise;
+    } );
 }
 
 function getThemeFromFormStr( formStr ) {
-    var matches = formStr.match( /<\s?form .*theme-([A-z]+)/ );
+    var matches = formStr.match( /<\s?form .*theme-([A-z\-]+)/ );
     return ( matches && matches.length > 1 ) ? matches[ 1 ] : null;
 }
 
@@ -88,10 +116,13 @@ function getTitleFromFormStr( formStr ) {
 }
 
 function csvToXml( csv ) {
-    var xmlStr,
-        result = Papa.parse( csv ),
-        rows = result.data,
-        headers = rows.shift();
+    var xmlStr;
+    var options = {
+        skipEmptyLines: true
+    };
+    var result = Papa.parse( csv, options );
+    var rows = result.data;
+    var headers = rows.shift();
 
     if ( result.errors.length ) {
         throw result.errors[ 0 ];
@@ -117,6 +148,54 @@ function csvToXml( csv ) {
     return xmlStr;
 }
 
+/**
+ * Generates a querystring from an object or an array of objects with `name` and `value` properties.
+ * 
+ * @param  {{name: string, value: *}|<{name: string, value: *}>} obj [description]
+ * @return {[type]}     [description]
+ */
+function getQueryString( obj ) {
+    var arr;
+    var serialized;
+
+    if ( !Array.isArray( obj ) ) {
+        arr = [ obj ];
+    } else {
+        arr = obj;
+    }
+
+    serialized = arr.reduce( function( previousValue, item ) {
+        var addition = '';
+        if ( item && typeof item.name !== 'undefined' && typeof item.value !== 'undefined' && item.value !== '' && item.value !== null ) {
+            addition = ( previousValue ) ? '&' : '';
+            addition += _serializeQueryComponent( item.name, item.value );
+        }
+        return previousValue + addition;
+    }, '' );
+
+    return ( serialized.length > 0 ) ? '?' + serialized : '';
+}
+
+function _serializeQueryComponent( name, value ) {
+    var n;
+    var serialized = '';
+
+    // for both arrays of single-level objects and regular single-level objects
+    if ( typeof value === 'object' ) {
+        for ( n in value ) {
+            if ( value.hasOwnProperty( n ) ) {
+                if ( serialized ) {
+                    serialized += '&';
+                }
+                serialized += encodeURIComponent( name ) + '[' + encodeURIComponent( n ) + ']' +
+                    '=' + encodeURIComponent( value[ n ] );
+            }
+        }
+        return serialized;
+    }
+    return encodeURIComponent( name ) + '=' + encodeURIComponent( value );
+}
+
 function _throwInvalidXmlNodeName( name ) {
     // Note: this is more restrictive than XML spec.
     // We cannot accept namespaces prefixes because there is no way of knowing the namespace uri in CSV.
@@ -129,8 +208,10 @@ function _throwInvalidXmlNodeName( name ) {
 
 module.exports = {
     blobToDataUri: blobToDataUri,
+    blobToArrayBuffer: blobToArrayBuffer,
     dataUriToBlob: dataUriToBlob,
     getThemeFromFormStr: getThemeFromFormStr,
     getTitleFromFormStr: getTitleFromFormStr,
-    csvToXml: csvToXml
+    csvToXml: csvToXml,
+    getQueryString: getQueryString
 };

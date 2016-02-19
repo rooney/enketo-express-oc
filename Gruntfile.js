@@ -1,7 +1,7 @@
-"use strict";
+'use strict';
 
 module.exports = function( grunt ) {
-    var JS_INCLUDE = [ "**/*.js", "!node_modules/**", "!test/**/*.spec.js", "!public/lib/**/*.js", '!public/js/*-bundle.js', '!public/js/*-bundle.min.js' ];
+    var JS_INCLUDE = [ '**/*.js', '!node_modules/**', '!test/**/*.spec.js', '!public/lib/**/*.js', '!public/js/*-bundle.js', '!public/js/*-bundle.min.js' ];
     var pkg = grunt.file.readJSON( 'package.json' );
 
     require( 'time-grunt' )( grunt );
@@ -19,6 +19,7 @@ module.exports = function( grunt ) {
         nodemon: {
             dev: {
                 script: 'app.js',
+                watch: JS_INCLUDE,
                 options: {
                     //nodeArgs: [ '--debug' ],
                     callback: function( nodemon ) {
@@ -82,20 +83,20 @@ module.exports = function( grunt ) {
             test: {
                 src: JS_INCLUDE,
                 options: {
-                    config: "./.jsbeautifyrc",
-                    mode: "VERIFY_ONLY"
+                    config: './.jsbeautifyrc',
+                    mode: 'VERIFY_ONLY'
                 }
             },
             fix: {
                 src: JS_INCLUDE,
                 options: {
-                    config: "./.jsbeautifyrc"
+                    config: './.jsbeautifyrc'
                 }
             }
         },
         jshint: {
             options: {
-                jshintrc: ".jshintrc"
+                jshintrc: '.jshintrc'
             },
             all: JS_INCLUDE,
         },
@@ -118,11 +119,11 @@ module.exports = function( grunt ) {
                 reporters: [ 'dots' ]
             },
             headless: {
-                configFile: 'test/client/config/headless-karma.conf.js',
+                configFile: 'test/client/config/karma.conf.js',
                 browsers: [ 'PhantomJS' ]
             },
             browsers: {
-                configFile: 'test/client/config/browser-karma.conf.js',
+                configFile: 'test/client/config/karma.conf.js',
                 browsers: [ 'Chrome', 'ChromeCanary', 'Firefox', 'Opera' /*,'Safari'*/ ],
             }
         },
@@ -163,6 +164,9 @@ module.exports = function( grunt ) {
             },
         },
         env: {
+            develop: {
+                NODE_ENV: 'develop'
+            },
             test: {
                 NODE_ENV: 'test'
             }
@@ -170,7 +174,7 @@ module.exports = function( grunt ) {
     } );
 
     grunt.registerTask( 'client-config-file', 'Temporary client-config file', function( task ) {
-        var clientConfigPath = "public/temp-client-config.json";
+        var clientConfigPath = 'public/temp-client-config.json';
         if ( task === 'create' ) {
             var config = require( './app/models/config-model' );
             grunt.file.write( clientConfigPath, JSON.stringify( config.client ) );
@@ -182,9 +186,9 @@ module.exports = function( grunt ) {
     } );
 
     grunt.registerTask( 'default', [ 'sass', 'compile', 'uglify' ] );
-    grunt.registerTask( 'compile', [ 'client-config-file:create', 'browserify:production', 'client-config-file:remove' ] );
-    grunt.registerTask( 'compile-dev', [ 'client-config-file:create', 'browserify:development', 'client-config-file:remove' ] );
-    grunt.registerTask( 'test', [ 'env:test', 'compile', 'mochaTest:all', 'karma:headless', 'jsbeautifier:test', 'jshint' ] );
-    grunt.registerTask( 'test-browser', [ 'env:test', 'client-config-file:create', 'karma:browsers', 'client-config-file:remove' ] );
-    grunt.registerTask( 'develop', [ 'compile-dev', 'concurrent:develop' ] );
+    grunt.registerTask( 'compile', [ 'client-config-file:create', 'browserify:production' ] );
+    grunt.registerTask( 'compile-dev', [ 'client-config-file:create', 'browserify:development' ] );
+    grunt.registerTask( 'test', [ 'env:test', 'compile', 'sass', 'mochaTest:all', 'karma:headless', 'jsbeautifier:test', 'jshint' ] );
+    grunt.registerTask( 'test-browser', [ 'env:test', 'sass', 'client-config-file:create', 'karma:browsers' ] );
+    grunt.registerTask( 'develop', [ 'env:develop', 'compile-dev', 'concurrent:develop' ] );
 };

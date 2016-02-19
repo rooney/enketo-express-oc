@@ -1,6 +1,6 @@
 // Karma configuration
 // Generated on Wed Nov 26 2014 15:52:30 GMT-0700 (MST)
-"use strict";
+'use strict';
 
 module.exports = function( config ) {
     config.set( {
@@ -16,7 +16,7 @@ module.exports = function( config ) {
 
         // list of files / patterns to load in the browser
         files: [
-            'test/client/**/*spec.js', {
+            'test/client/**/*.spec.js', {
                 pattern: 'public/js/src/**/*.js',
                 included: false
             },
@@ -30,14 +30,20 @@ module.exports = function( config ) {
         // preprocess matching files before serving them to the browser
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
-            'test/client/**/*spec.js': [ 'browserify' ],
+            'test/client/**/*.spec.js': [ 'browserify' ],
+        },
+
+
+        browserify: {
+            debug: true,
+            transform: [ 'aliasify' ]
         },
 
 
         // test results reporter to use
         // possible values: 'dots', 'progress'
         // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-        // reporters: [ 'dots' ],
+        reporters: [ 'dots' ],
 
 
         // web server port
@@ -59,7 +65,7 @@ module.exports = function( config ) {
 
         // start these browsers
         // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-        //browsers: [ 'Chrome', 'Safari', 'Firefox', 'Opera' ],
+        // browsers: [ 'Chrome', 'Safari', 'Firefox', 'Opera' ],
 
 
         // Continuous Integration mode
