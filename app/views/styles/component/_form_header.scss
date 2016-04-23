@@ -80,7 +80,7 @@ $offline-color: #d15200;
         width: 34px;
         height: 34px;
         background-color: $offline-color;
-        background-image: url("/images/offline-enabled.png");
+        background-image: url($base-path+"/images/offline-enabled.png");
         background-repeat: no-repeat;
         opacity: 1;
         @include transition-slow(opacity, 3s);
@@ -198,7 +198,7 @@ $offline-color: #d15200;
             display: block;
         }
     }
-    .or .form-logo {
+    .or .form-logo img {
         margin-top: 45px;
     }
      .form-header__button--homescreen {

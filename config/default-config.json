@@ -2,7 +2,7 @@
     "app name": "Enketo Smart Paper for KoBoCAT",
     "port": "8005",
     "account manager api key": "ocrocks",
-    "offline enabled": false,
+    "offline enabled": true,
     "linked form and data server": {
         "name": "KoBoCAT",
         "server url": "kf.kobotoolbox.org",
@@ -16,12 +16,14 @@
     },
     "encryption key": "s0m3v3rys3cr3tk3y",
     "default theme": "oc",
+    "base path": "",
     "log": {
         "submissions": false
     },
     "support": {
         "email": "info@kobotoolbox.org"
     },
+    "analytics": "google",
     "google": {
         "analytics": {
             "ua": "",
@@ -29,9 +31,16 @@
         },
         "api key": ""
     },
+    "piwik": {
+        "analytics": {
+            "tracker url": "",
+            "site id": ""
+        }
+    },
     "maps": [ {
-        "tiles": [ "http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" ],
-        "attribution": "Map data © <a href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
+        "name": "streets",
+        "tiles": [ "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" ],
+        "attribution": "© <a href=\"http://openstreetmap.org\">OpenStreetMap</a> | <a href=\"www.openstreetmap.org/copyright\">Terms</a>"
     } ],
     "query parameter to pass to submission": "",
     "redis": {
